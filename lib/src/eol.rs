@@ -16,6 +16,9 @@ use bstr::ByteSlice as _;
 use futures::AsyncRead;
 use futures::AsyncReadExt as _;
 use futures::io::Cursor;
+use std::path::Path;
+use encoding_rs::WINDOWS_1252;
+// use zerocopy::IntoBytes;
 
 use crate::config::ConfigGetError;
 use crate::settings::UserSettings;
@@ -83,9 +86,30 @@ impl TargetEolStrategy {
     pub(crate) async fn convert_eol_for_snapshot<'a>(
         &self,
         mut contents: impl AsyncRead + Send + Unpin + 'a,
+	disk_path: &Path,
     ) -> Result<Box<dyn AsyncRead + Send + Unpin + 'a>, std::io::Error> {
+	let needs_conversion = disk_path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| {
+		let ext = ext.to_lowercase();
+		ext == "tcl" || ext == "lp0"
+            })
+            .unwrap_or(false);
+
+	let mut bytes = vec![];
+	let _unused = contents.read_to_end(&mut bytes).await;
+	let c =
+	    if needs_conversion {
+		let (r, _, _replaced) = WINDOWS_1252.decode(&bytes);
+		r.as_bytes().to_vec()
+	    } else {
+		bytes.as_bytes().to_vec()
+	    };
+
+	let mut contents = Box::new(Cursor::new(c));
         match self.eol_conversion_mode {
-            EolConversionMode::None => Ok(Box::new(contents)),
+            EolConversionMode::None => Ok(contents),
             EolConversionMode::Input | EolConversionMode::InputOutput => {
                 let mut peek = vec![];
                 let target_eol = if Self::probe_for_binary(&mut contents, &mut peek).await? {
@@ -103,9 +127,31 @@ impl TargetEolStrategy {
     pub(crate) async fn convert_eol_for_update<'a>(
         &self,
         mut contents: impl AsyncRead + Send + Unpin + 'a,
+	disk_path: &Path,
     ) -> Result<Box<dyn AsyncRead + Send + Unpin + 'a>, std::io::Error> {
+	let needs_conversion = disk_path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| {
+		let ext = ext.to_lowercase();
+		ext == "tcl" || ext == "lp0"
+            })
+            .unwrap_or(false);
+
+	let mut bytes = vec![];
+	let _unused = contents.read_to_end(&mut bytes).await;
+	let c =
+	    if needs_conversion {
+		let s = str::from_utf8(&bytes).unwrap();
+		let (decoded, _, _replaced) = WINDOWS_1252.encode(&s);
+		decoded.as_bytes().to_vec()
+	    } else {
+		bytes.as_bytes().to_vec()
+	    };
+
+	let mut contents = Box::new(Cursor::new(c));
         match self.eol_conversion_mode {
-            EolConversionMode::None | EolConversionMode::Input => Ok(Box::new(contents)),
+            EolConversionMode::None | EolConversionMode::Input => Ok(contents),
             EolConversionMode::InputOutput => {
                 let mut peek = vec![];
                 let target_eol = if Self::probe_for_binary(&mut contents, &mut peek).await? {

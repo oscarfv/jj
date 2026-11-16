@@ -2110,7 +2110,7 @@ impl FileSnapshotter<'_> {
             })?;
             self.tree_state
                 .target_eol_strategy
-                .convert_eol_for_snapshot(AllowStdIo::new(file))
+                .convert_eol_for_snapshot(AllowStdIo::new(file), disk_path)
                 .await
                 .map_err(|err| SnapshotError::Other {
                     message: "Failed to convert the EOL".to_string(),
@@ -2175,7 +2175,7 @@ impl FileSnapshotter<'_> {
         let mut contents = self
             .tree_state
             .target_eol_strategy
-            .convert_eol_for_snapshot(AllowStdIo::new(file))
+            .convert_eol_for_snapshot(AllowStdIo::new(file), disk_path)
             .await
             .map_err(|err| SnapshotError::Other {
                 message: "Failed to convert the EOL".to_string(),
@@ -2240,7 +2240,7 @@ impl TreeState {
             })?;
         let contents = if apply_eol_conversion {
             self.target_eol_strategy
-                .convert_eol_for_update(contents)
+                .convert_eol_for_update(contents, disk_path)
                 .await
                 .map_err(|err| CheckoutError::Other {
                     message: "Failed to convert the EOL for the content".to_string(),
@@ -2316,7 +2316,7 @@ impl TreeState {
     ) -> Result<FileState, CheckoutError> {
         let contents = self
             .target_eol_strategy
-            .convert_eol_for_update(contents)
+            .convert_eol_for_update(contents, disk_path)
             .await
             .map_err(|err| CheckoutError::Other {
                 message: "Failed to convert the EOL when writing a merge conflict".to_string(),
